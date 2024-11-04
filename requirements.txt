@@ -2,3 +2,5 @@
 google-generativeai
 fastapi
 streamlit
+python-multipart
+uvicorn
