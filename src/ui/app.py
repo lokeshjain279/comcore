@@ -1,37 +1,84 @@
 import streamlit as st
 import requests
 
-# API endpoints
-BASE_URL = "https://comcore.onrender.com/api/v1"
+# Define the base API URLs
+BARCODE_API_URL = "https://comcore.onrender.com/api/v1/product/lookup/"
+IMAGE_API_URL = "https://comcore.onrender.com/api/v1/product/describe/"
+SHOPIFY_SYNC_API_URL = "https://comcore.onrender.com/api/v1/shopify/sync/"
+
 # BARCODE_API_URL = "http://localhost:8000/api/v1/product/lookup/"  # Endpoint for barcode lookup
 # IMAGE_API_URL = "http://localhost:8000/api/v1/product/describe"  # Endpoint for image upload
 # SHOPIFY_SYNC_API_URL = "http://localhost:8000/api/v1/shopify/sync"  # Endpoint for Shopify sync
-
-BARCODE_API_URL = f"{BASE_URL}/product/lookup/" # Endpoint for barcode lookup
-IMAGE_API_URL = f"{BASE_URL}/product/describe/"  # Endpoint for image upload
-SHOPIFY_SYNC_API_URL = f"{BASE_URL}/shopify/sync/"
 
 # Initialize session state variables
 if "product_data" not in st.session_state:
     st.session_state["product_data"] = {}
 if "shopify_sync_message" not in st.session_state:
     st.session_state["shopify_sync_message"] = ""
-if "update_trigger" not in st.session_state:
-    st.session_state["update_trigger"] = False  # Trigger to control UI refreshes
 
-# Function to toggle update trigger for UI refresh
-def toggle_update_trigger():
-    st.session_state["update_trigger"] = not st.session_state["update_trigger"]
+# Function to clear product data
+def clear_product_data():
+    st.session_state["product_data"] = {}
+    st.session_state["shopify_sync_message"] = ""
 
-# Page configuration
-st.set_page_config(page_title="Product Enrichment Tool", layout="centered")
-st.markdown("<style>body { background-color: #f7f7f7; }</style>", unsafe_allow_html=True)
+# Tabs for different functionalities
+tab = st.sidebar.radio("Select functionality", ["Lookup by Barcode", "Upload Image"])
 
-st.title("📦 Product Enrichment Tool")
-st.write("Retrieve and enrich product details by scanning a barcode or uploading an image.")
+# Clear data when switching tabs
+if "active_tab" not in st.session_state:
+    st.session_state["active_tab"] = tab
+elif st.session_state["active_tab"] != tab:
+    st.session_state["active_tab"] = tab
+    clear_product_data()
 
-# Tabs for input options
-tab1, tab2 = st.tabs(["🔍 Lookup by Barcode", "📸 Upload Image"])
+# Function to display product details for image-based lookup
+def display_product_details_from_image():
+    product_data = st.session_state["product_data"]
+    st.write("### Product Details from Image")
+    if not product_data:
+        st.warning("No product data available.")
+        return
+
+    # Basic Information
+    with st.expander("Basic Information", expanded=True):
+        st.text_input("Title", value=product_data.get("Title", ""))
+        st.text_area("Description", value=product_data.get("Description", ""))
+        st.text_input("Brand", value=product_data.get("Brand", ""))
+        st.text_input("Model Number", value=product_data.get("Model number", ""))
+        st.text_input("ASIN", value=product_data.get("ASIN", ""))
+        st.text_input("Manufacturer Part Number (MPN)", value=product_data.get("Manufacturer part number (MPN)", ""))
+        st.text_input("Barcode Number", value=product_data.get("Barcode number", ""))
+        st.text_input("Barcode Formats", value=product_data.get("Barcode formats", ""))
+        st.text_input("Category", value=product_data.get("Category", ""))
+        st.text_input("Color", value=product_data.get("Color", ""))
+        st.text_input("Size", value=product_data.get("Size", ""))
+    
+    # Material
+    material_text = "\n".join(product_data.get("Material", []))
+    with st.expander("Material"):
+        st.text_area("Material", value=material_text)
+
+    # Features
+    features_text = "\n".join(product_data.get("Features", []))
+    with st.expander("Features"):
+        st.text_area("Additional Features", value=features_text)
+
+    # Images
+    if "Images" in product_data and product_data["Images"] != ["N/A"]:
+        with st.expander("Images"):
+            for image_url in product_data["Images"]:
+                if image_url != "N/A":
+                    st.image(image_url, width=150)
+                else:
+                    st.write("No images available")
+
+    # Shopify Sync Button
+    if st.button("Sync to Shopify"):
+        sync_to_shopify(product_data)
+
+    # Display Shopify sync result message if available
+    if st.session_state["shopify_sync_message"]:
+        st.write(st.session_state["shopify_sync_message"])
 
 # Function to display product details for barcode-based lookup
 def display_product_details():
@@ -73,127 +120,50 @@ def display_product_details():
             for image_url in product_data["images"]:
                 st.image(image_url, width=150)
 
-    # Sync to Shopify Button
+    # Shopify Sync Button
     if st.button("Sync to Shopify"):
-        # Prepare payload for Shopify sync
-        sync_payload = {
-            "title": title,
-            "description": description,
-            "manufacturer": manufacturer,
-            "category": category
-        }
-
-        # Call the Shopify sync FastAPI endpoint
-        with st.spinner("Syncing product to Shopify..."):
-            try:
-                response = requests.post(SHOPIFY_SYNC_API_URL, json=sync_payload)
-                if response.status_code == 200:
-                    st.session_state["shopify_sync_message"] = "Product synced successfully with Shopify!"
-                    st.session_state["shopify_sync_message"] += f"\nShopify Response: {response.json()}"
-                else:
-                    st.session_state["shopify_sync_message"] = f"Failed to sync with Shopify: {response.status_code}"
-                    st.session_state["shopify_sync_message"] += f"\nError Details: {response.json().get('detail', 'No further details available')}"
-            except Exception as e:
-                st.session_state["shopify_sync_message"] = f"Error calling Shopify sync API: {e}"
+        sync_to_shopify(product_data)
 
     # Display Shopify sync result message if available
     if st.session_state["shopify_sync_message"]:
         st.write(st.session_state["shopify_sync_message"])
 
+# Function to sync product data to Shopify
+def sync_to_shopify(product_data):
+    # Prepare payload for Shopify sync
+    sync_payload = {
+        "title": product_data.get("Title", product_data.get("title", "")),
+        "description": product_data.get("Description", product_data.get("description", "")),
+        "brand": product_data.get("Brand", product_data.get("brand", "")),
+        "category": product_data.get("Category", product_data.get("category", ""))
+    }
 
-# Function to display product details for image-based lookup
-def display_product_details_from_image():
-    product_data = st.session_state["product_data"]
-    st.write("### Product Details from Image")
-    if not product_data:
-        st.warning("No product data available.")
-        return
+    # Call the Shopify sync FastAPI endpoint
+    with st.spinner("Syncing product to Shopify..."):
+        try:
+            response = requests.post(SHOPIFY_SYNC_API_URL, json=sync_payload)
+            if response.status_code == 200:
+                st.session_state["shopify_sync_message"] = "Product synced successfully with Shopify!"
+                st.session_state["shopify_sync_message"] += f"\nShopify Response: {response.json()}"
+            else:
+                st.session_state["shopify_sync_message"] = f"Failed to sync with Shopify: {response.status_code}"
+                st.session_state["shopify_sync_message"] += f"\nError Details: {response.json().get('detail', 'No further details available')}"
+        except Exception as e:
+            st.session_state["shopify_sync_message"] = f"Error calling Shopify sync API: {e}"
 
-    # Basic Information
-    with st.expander("Basic Information", expanded=True):
-        name = st.text_input("Name", value=product_data.get("name", ""))
-        description = st.text_area("Description", value=product_data.get("description", ""))
-        brand = st.text_input("Brand", value=product_data.get("brand", ""))
-        model = st.text_input("Model", value=product_data.get("model", ""))
-        sku = st.text_input("SKU", value=product_data.get("sku", ""))
-        upc = st.text_input("UPC", value=product_data.get("upc", ""))
-        asin = st.text_input("ASIN", value=product_data.get("asin", ""))
-        category = st.text_input("Category", value=product_data.get("category", ""))
-        subcategory = st.text_input("Subcategory", value=product_data.get("subcategory", ""))
-
-    # Tags
-    with st.expander("Tags"):
-        for tag in product_data.get("tags", []):
-            st.text_input("Tag", value=tag, key=tag)
-
-    # Specifications
-    specifications = product_data.get("specifications", {})
-    with st.expander("Specifications"):
-        st.text_input("Material", value=specifications.get("material", ""))
-        st.text_input("Color", value=specifications.get("color", ""))
-        st.text_input("Style", value=specifications.get("style", ""))
-
-        # Display all features in a single text area
-        features_text = "\n".join(specifications.get("features", []))  # Join features into a single string
-        st.text_area("Additional Features", value=features_text)
-
-    # Weight and Dimensions
-    with st.expander("Weight and Dimensions"):
-        st.text_input("Weight", value=product_data.get("weight", ""))
-        dimensions = product_data.get("dimensions", {})
-        if "chair" in dimensions:
-            st.write("Chair Dimensions")
-            st.text_input("Width", value=dimensions["chair"].get("width", ""))
-            st.text_input("Depth", value=dimensions["chair"].get("depth", ""))
-            st.text_input("Height", value=dimensions["chair"].get("height", ""))
-        if "ottoman" in dimensions:
-            st.write("Ottoman Dimensions")
-            st.text_input("Width", value=dimensions["ottoman"].get("width", ""))
-            st.text_input("Depth", value=dimensions["ottoman"].get("depth", ""))
-            st.text_input("Height", value=dimensions["ottoman"].get("height", ""))
-
-    # Sync to Shopify Button
-    if st.button("Sync to Shopify"):
-        # Prepare payload for Shopify sync
-        sync_payload = {
-            "title": name,
-            "description": description,
-            "manufacturer": brand,
-            "category": category
-        }
-
-        # Call the Shopify sync FastAPI endpoint
-        with st.spinner("Syncing product to Shopify..."):
-            try:
-                response = requests.post(SHOPIFY_SYNC_API_URL, json=sync_payload)
-                if response.status_code == 200:
-                    st.session_state["shopify_sync_message"] = "Product synced successfully with Shopify!"
-                    st.session_state["shopify_sync_message"] += f"\nShopify Response: {response.json()}"
-                else:
-                    st.session_state["shopify_sync_message"] = f"Failed to sync with Shopify: {response.status_code}"
-                    st.session_state["shopify_sync_message"] += f"\nError Details: {response.json().get('detail', 'No further details available')}"
-            except Exception as e:
-                st.session_state["shopify_sync_message"] = f"Error calling Shopify sync API: {e}"
-
-    # Display Shopify sync result message if available
-    if st.session_state["shopify_sync_message"]:
-        st.write(st.session_state["shopify_sync_message"])
-
-# Barcode lookup functionality
-with tab1:
+# Barcode Lookup functionality
+if tab == "Lookup by Barcode":
     st.subheader("🔍 Lookup Product by Barcode")
     barcode = st.text_input("Enter Product Barcode")
-    if st.button("Fetch Product Details", key="barcode_button"):
+    if st.button("Fetch Product Details"):
         if barcode:
             try:
                 # Call barcode API
+                # response = requests.get(f"{BARCODE_API_URL}?barcode={barcode}")
                 response = requests.get(f"{BARCODE_API_URL}{barcode}")
-                if response.status_code == 200:
-                    data = response.json()
-                    st.session_state["product_data"] = data.get("product_data", {})
-                    # st.session_state["product_data"].pop("images", None)  # Remove images if present
+                if response.status_code == 200 and "product_data" in response.json():
+                    st.session_state["product_data"] = response.json().get("product_data", {})
                     st.session_state["shopify_sync_message"] = ""
-                    toggle_update_trigger()  # Trigger refresh
                 else:
                     st.error("Product not found or error in fetching data.")
             except Exception as e:
@@ -201,21 +171,22 @@ with tab1:
         else:
             st.warning("Please enter a valid barcode.")
 
-# Image upload functionality
-with tab2:
+    # Display product details if fetched
+    if "product_data" in st.session_state and st.session_state["product_data"]:
+        display_product_details()
+
+# Image Upload functionality
+elif tab == "Upload Image":
     st.subheader("📸 Upload Product Image")
     uploaded_file = st.file_uploader("Choose a product image", type=["jpg", "jpeg", "png"])
-    if st.button("Fetch Product Details", key="image_button"):
+    if st.button("Fetch Product Details from Image"):
         if uploaded_file:
             try:
-                files = {"image": (uploaded_file.name, uploaded_file, "multipart/form-data")}
+                files = {"image": uploaded_file}
                 response = requests.post(IMAGE_API_URL, files=files)
-                print(f"Response IMAGe is {response}")
-                if response.status_code == 200:
+                if response.status_code == 200 and "product_data" in response.json():
                     st.session_state["product_data"] = response.json().get("product_data", {})
-                    st.session_state["product_data"].pop("images", None)  # Remove images if present
                     st.session_state["shopify_sync_message"] = ""
-                    toggle_update_trigger()  # Trigger refresh
                 else:
                     st.error("Error in fetching data or processing image.")
             except Exception as e:
@@ -223,9 +194,6 @@ with tab2:
         else:
             st.warning("Please upload a valid image file.")
 
-# Display product details based on the type of lookup
-if st.session_state["product_data"]:
-    if "name" in st.session_state["product_data"]:
-        display_product_details_from_image()  # Display for image-based lookup
-    else:
-        display_product_details()  # Display for barcode-based lookup
+    # Display product details if fetched
+    if "product_data" in st.session_state and st.session_state["product_data"]:
+        display_product_details_from_image()
