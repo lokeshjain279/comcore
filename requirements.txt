@@ -1,0 +1,4 @@
+# Inside requirements.txt
+google-generativeai
+fastapi
+streamlit
