@@ -2,9 +2,14 @@ import streamlit as st
 import requests
 
 # API endpoints
-BARCODE_API_URL = "http://localhost:8000/api/v1/product/lookup/"  # Endpoint for barcode lookup
-IMAGE_API_URL = "http://localhost:8000/api/v1/product/describe"  # Endpoint for image upload
-SHOPIFY_SYNC_API_URL = "http://localhost:8000/api/v1/shopify/sync"  # Endpoint for Shopify sync
+BASE_URL = "https://comcore.onrender.com/api/v1"
+# BARCODE_API_URL = "http://localhost:8000/api/v1/product/lookup/"  # Endpoint for barcode lookup
+# IMAGE_API_URL = "http://localhost:8000/api/v1/product/describe"  # Endpoint for image upload
+# SHOPIFY_SYNC_API_URL = "http://localhost:8000/api/v1/shopify/sync"  # Endpoint for Shopify sync
+
+BARCODE_API_URL = f"{BASE_URL}/product/lookup/" # Endpoint for barcode lookup
+IMAGE_API_URL = f"{BASE_URL}/product/describe/"  # Endpoint for image upload
+SHOPIFY_SYNC_API_URL = f"{BASE_URL}/shopify/sync/"
 
 # Initialize session state variables
 if "product_data" not in st.session_state:
