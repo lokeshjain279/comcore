@@ -108,13 +108,13 @@ def display_product_details_from_image():
         st.text_area("Features", value=features_text)
 
     # Images
-    if "Images" in product_data and product_data["Images"] != ["N/A"]:
-        with st.expander("📸 Images"):
-            for image_url in product_data["Images"]:
-                if image_url != "N/A":
-                    st.image(image_url, width=150)
-                else:
-                    st.write("No images available")
+    # if "Images" in product_data and product_data["Images"] != ["N/A"]:
+    #     with st.expander("📸 Images"):
+    #         for image_url in product_data["Images"]:
+    #             if image_url != "N/A":
+    #                 st.image(image_url, width=150)
+    #             else:
+    #                 st.write("No images available")
 
     # Shopify Sync Button
     if st.button("🚀 Sync to Shopify"):
@@ -171,7 +171,8 @@ def display_product_details():
 
     # Display Shopify sync result message if available
     if st.session_state["shopify_sync_message"]:
-        st.write(st.session_state["shopify_sync_message"])
+        st.success("Product successfully synced to Shopify!")
+        # st.write(st.session_state["shopify_sync_message"])
 
 # Function to sync product data to Shopify
 def sync_to_shopify(product_data):
