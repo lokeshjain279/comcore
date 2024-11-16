@@ -1,6 +1,3 @@
-Here’s a comprehensive README for your project, **Comcore**:
-
----
 
 # Comcore: AI-powered Product Data Enrichment Tool
 
